@@ -14,7 +14,7 @@ Import-Module Microsoft.Graph.Identity.SignIns
 Install-Module Microsoft.Graph.Beta.Security
 Install-Module Microsoft.Graph.Authentication
 Install-Module ExchangePowerShell
-Install-Module MicrosoftTeamsPowerShell
+Install-Module MicrosoftTeams
 ```
 
 ### Usage
