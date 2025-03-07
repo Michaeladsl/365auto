@@ -16,7 +16,7 @@ function Authenticate-Once {
         Write-Host "Connected to Microsoft Teams." -ForegroundColor Green
     
         Write-Host "Authenticating to Microsoft Graph..." -ForegroundColor Cyan
-        Connect-MgGraph -Scopes 'Policy.Read.All, Directory.Read.All, Sites.Read.All, AuditLog.Read.All, Security.SecureScores.Read.All' -NoWelcome
+        Connect-MgGraph -Scopes 'Policy.Read.All, Directory.Read.All, Sites.Read.All, AuditLog.Read.All, OrgSettings-Forms.Read.All, OrgSettings-AppsAndServices.Read.All, PeopleSettings.Read.All, AuditLogsQuery-SharePoint.Read.All, SecurityEvents.Read.All, SecurityActions.Read.All, SecurityBaseline.Read.All' -NoWelcome
         Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
     
         Write-Host "Authenticating to Exchange Online..." -ForegroundColor Cyan
@@ -231,15 +231,50 @@ $scripts = @(
                 Write-Host $_.Exception.Message
             }
         }
-    }
-    ,
+    },
     @{
-        Name = "1.3.4 User-Owned Apps Restricted"
-        Type = "Manual"
-        Link = "https://admin.microsoft.com/#/Settings/Services/:/Settings/L1/Store"
-        explanation = {
-            Verify that user-owned apps are restricted in the Microsoft Admin Center.
-            Let users access the office store and Starting trials on behalf of your organization should NOT be checked
+        Name = "1.3.4 Apps and Services Settings Check"
+        Type = "Script"
+        Logic = {
+            try {
+
+                $endpoint = "https://graph.microsoft.com/beta/admin/appsAndServices"
+
+                $response = Invoke-MgGraphRequest -Uri $endpoint -Method GET
+
+                Write-Host "Raw API Response:"
+                Write-Host ($response | ConvertTo-Json -Depth 10)
+                Write-Host ""
+
+                if (-not $response.PSObject.Properties["settings"]) {
+                    Write-Host "Fail: API response does not contain 'settings'." -ForegroundColor Red
+                    return
+                }
+
+                $settings = $response.settings
+
+                Write-Host "Extracted Settings:"
+                Write-Host ($settings | ConvertTo-Json -Depth 10)
+                Write-Host ""
+
+                $isOfficeStoreEnabled = $settings.isOfficeStoreEnabled
+                $isAppAndServicesTrialEnabled = $settings.isAppAndServicesTrialEnabled
+
+                if ($isOfficeStoreEnabled -eq $true -or $isAppAndServicesTrialEnabled -eq $true) {
+                    Write-Host "Fail: One or more settings are enabled." -ForegroundColor Red
+                    if ($isOfficeStoreEnabled -eq $true) {
+                        Write-Host "Fail: Office Store is enabled." -ForegroundColor Red
+                    }
+                    if ($isAppAndServicesTrialEnabled -eq $true) {
+                        Write-Host "Fail: App and Services Trial is enabled." -ForegroundColor Red
+                    }
+                } else {
+                    Write-Host "Pass: Both Office Store and App & Services Trial are disabled." -ForegroundColor Green
+                }
+            } catch {
+                Write-Host "Error retrieving Apps and Services settings." -ForegroundColor Red
+                Write-Host $_.Exception.Message
+            }
         }
     },
     @{
@@ -280,12 +315,31 @@ $scripts = @(
         }
     },
     @{
-        Name = "1.3.7 Third-Party Storage Services"
-        Type = "Manual"
-        Link = "https://admin.microsoft.com/#/Settings/Services/:/Settings/L1/OfficeOnline"
-        explanation = {
-            Verify that third-part storage services are disabled.
-            Ensure 'Let users open files stored in third-party storage services' is NOT checked
+        Name = "1.3.7 Third Party Storage"
+        Type = "Script"
+        Logic = {
+            try {
+
+                $appId = "c1f33bc0-bdb4-4248-ba9b-096807ddb43e"
+                $endpoint = "https://graph.microsoft.com/v1.0/servicePrincipals?`$filter=appId eq '$appId'"
+
+                $response = Invoke-MgGraphRequest -Uri $endpoint -Method GET
+
+                Write-Host ($response | ConvertTo-Json -Depth 10)
+                Write-Host ""
+
+                if ($response.value -and $response.value.Count -gt 0) {
+                    Write-Host "Fail: The following service principal(s) exist with App ID `${appId}`:" -ForegroundColor Red
+                    foreach ($sp in $response.value) {
+                        Write-Host "Display Name: $($sp.displayName)" -ForegroundColor Red
+                    }
+                } else {
+                    Write-Host "Pass: No service principal exists with App ID `${appId}`." -ForegroundColor Green
+                }
+            } catch {
+                Write-Host "Error retrieving service principal." -ForegroundColor Red
+                Write-Host $_.Exception.Message
+            }
         }
     },
     @{
@@ -1053,14 +1107,44 @@ $scripts = @(
         }
     },    
     @{
-        Name = "5.1.2.1 Per-User MFA"
-        Type = "Manual"
-        Link = "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/MultifactorAuthenticationConfig.ReactView"
-        explanation = {
-            Verify that Per-User MFA is disabled.
-            Ensure per-user MFA is 'Disabled' for all users.
+        Name = "5.1.2.1 Per-User MFA State"
+        Type = "Script"
+        Logic = {
+            try {
+                $users = Get-MgUser -All:$true | Select-Object Id, DisplayName, UserPrincipalName
+
+                $mfaResults = @()
+
+                foreach ($user in $users) {
+                    $mfaState = Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/beta/users/$($user.Id)/authentication/requirements" -Method GET
+                    
+                    $perUserMfaState = $mfaState.perUserMfaState
+
+                    $mfaResults += [PSCustomObject]@{
+                        DisplayName      = $user.DisplayName
+                        UserPrincipalName = $user.UserPrincipalName
+                        PerUserMfaState  = $perUserMfaState
+                    }
+                }
+
+                $mfaResults | Format-Table -AutoSize
+                Write-Host ""
+                Write-Host ""
+
+                if ($mfaResults.PerUserMfaState -contains "disabled") {
+                    Write-Host "Fail: Some users do not have MFA enabled." -ForegroundColor Red
+                } elseif ($mfaResults.Count -gt 0) {
+                    Write-Host "Pass: All users have MFA enabled." -ForegroundColor Green
+                } else {
+                    Write-Host "Fail: No users found or unable to determine MFA state." -ForegroundColor Red
+                }
+            } catch {
+                Write-Host "Error retrieving MFA state for users." -ForegroundColor Red
+                Write-Host $_.Exception.Message
+            }
         }
     },
+
     @{
         Name = "5.1.2.2 Third Party Application"
         Type = "Script"
@@ -1187,12 +1271,25 @@ $scripts = @(
         }
     },    
     @{
-        Name = "5.1.5.2 Admin Consent Workflow"
-        Type = "Manual"
-        Link = "https://aad.portal.azure.com/#view/Microsoft_AAD_IAM/ConsentPoliciesMenuBlade/~/AdminConsentSettings"
-        explanation = {
-            Verify that admin consent workflow is enabled
-            Ensure 'Users can request admin consent to apps they are unable to consent to' is set to 'Yes'
+        Name = "5.1.5.2 Admin Consent Request Policy"
+        Type = "Script"
+        Logic = {
+            try {
+                $adminConsentPolicy = Get-MgPolicyAdminConsentRequestPolicy | Select-Object IsEnabled, NotifyReviewers, RemindersEnabled, RequestDurationInDays
+
+                $adminConsentPolicy | Format-Table -AutoSize
+                Write-Host ""
+                Write-Host ""
+
+                if ($adminConsentPolicy.IsEnabled -eq $true) {
+                    Write-Host "Pass: Admin Consent Request Policy is enabled." -ForegroundColor Green
+                } else {
+                    Write-Host "Fail: Admin Consent Request Policy is disabled." -ForegroundColor Red
+                }
+            } catch {
+                Write-Host "Error retrieving Admin Consent Request Policy." -ForegroundColor Red
+                Write-Host $_.Exception.Message
+            }
         }
     },
     @{
@@ -1343,6 +1440,184 @@ $scripts = @(
         }
     },
     @{
+        Name = "5.2.2.2 Conditional Access MFA Policy Check"
+        Type = "Script"
+        Logic = {
+            try {
+
+                $policies = Get-MgIdentityConditionalAccessPolicy | Where-Object {
+                    $_.DisplayName -match "MFA" -and $_.State -eq "enabled"
+                }
+
+                if ($policies.Count -eq 0) {
+                    Write-Host "Fail: No enabled Conditional Access policies contain 'MFA' in their name." -ForegroundColor Red
+                    return
+                }
+
+                $failFlag = $false
+
+                foreach ($policy in $policies) {
+                    $policyId = $policy.Id
+                    $endpoint = "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies('$policyId')`?$select=conditions,createdDateTime"
+
+                    $response = Invoke-MgGraphRequest -Uri $endpoint -Method GET
+                    $responseJson = $response | ConvertTo-Json -Depth 10
+
+                    Write-Host "Policy ID: $policyId" -ForegroundColor Cyan
+                    Write-Host $responseJson
+                    Write-Host ""
+
+                    $users = $response.conditions.users
+
+                    if ($users.includeUsers -eq "All" -and -not $users.excludeUsers -and -not $users.excludeGroups) {
+                        Write-Host "Pass: MFA Conditional Access Policy '$($policy.DisplayName)' applies to all users." -ForegroundColor Green
+                    } else {
+                        Write-Host "Fail: MFA Conditional Access Policy '$($policy.DisplayName)' has exclusions." -ForegroundColor Red
+                        $failFlag = $true
+                    }
+                }
+
+                if ($failFlag) {
+                    Write-Host "Fail: One or more MFA Conditional Access policies have exclusions." -ForegroundColor Red
+                } else {
+                    Write-Host "Pass: All MFA Conditional Access policies apply to all users with no exclusions." -ForegroundColor Green
+                }
+            } catch {
+                Write-Host "Error retrieving Conditional Access policies." -ForegroundColor Red
+                Write-Host $_.Exception.Message
+            }
+        }
+    },
+    @{
+        Name = "5.2.2.4 Conditional Access Session Controls Check"
+        Type = "Script"
+        Logic = {
+            try {
+
+                $policies = Get-MgIdentityConditionalAccessPolicy | Where-Object { $_.State -eq "enabled" }
+
+                if ($policies.Count -eq 0) {
+                    Write-Host "Fail: No enabled Conditional Access policies found." -ForegroundColor Red
+                    return
+                }
+
+                $failFlag = $true
+
+                foreach ($policy in $policies) {
+                    $policyId = $policy.Id
+                    $endpoint = "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies('$policyId')`?$select=sessionControls"
+
+                    $response = Invoke-MgGraphRequest -Uri $endpoint -Method GET
+                    $sessionControls = $response.sessionControls
+
+                    Write-Host "Policy ID: $policyId" -ForegroundColor Cyan
+                    Write-Host ($sessionControls | ConvertTo-Json -Depth 10)
+                    Write-Host ""
+
+                    if ($sessionControls -and $sessionControls.PSObject.Properties.Count -gt 0) {
+                        Write-Host "Pass: Conditional Access Policy '$($policy.DisplayName)' has session controls configured." -ForegroundColor Green
+                        $failFlag = $false
+                    }
+                }
+
+                if ($failFlag) {
+                    Write-Host "Fail: No enabled Conditional Access policies have session controls configured." -ForegroundColor Red
+                } else {
+                    Write-Host "Pass: At least one enabled Conditional Access policy has session controls configured." -ForegroundColor Green
+                }
+            } catch {
+                Write-Host "Error retrieving Conditional Access policies." -ForegroundColor Red
+                Write-Host $_.Exception.Message
+            }
+        }
+    },
+    @{
+        Name = "5.2.2.5 Conditional Access Grant Controls Check"
+        Type = "Script"
+        Logic = {
+            try {
+
+                $policies = Get-MgIdentityConditionalAccessPolicy | Where-Object { $_.State -eq "enabled" }
+
+                if ($policies.Count -eq 0) {
+                    Write-Host "Fail: No enabled Conditional Access policies found." -ForegroundColor Red
+                    return
+                }
+
+                $failFlag = $true
+
+                foreach ($policy in $policies) {
+                    $policyId = $policy.Id
+                    $endpoint = "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies('$policyId')`?$select=grantControls"
+
+                    $response = Invoke-MgGraphRequest -Uri $endpoint -Method GET
+                    $grantControls = $response.grantControls
+
+                    Write-Host "Policy ID: $policyId" -ForegroundColor Cyan
+                    Write-Host ($grantControls | ConvertTo-Json -Depth 10)
+                    Write-Host ""
+
+                    if ($grantControls -and $grantControls.authenticationStrength) {
+                        Write-Host "Pass: Conditional Access Policy '$($policy.DisplayName)' has authentication strength configured." -ForegroundColor Green
+                        $failFlag = $false
+                    }
+                }
+
+                if ($failFlag) {
+                    Write-Host "Fail: No enabled Conditional Access policies have authentication strength configured in grantControls." -ForegroundColor Red
+                } else {
+                    Write-Host "Pass: At least one enabled Conditional Access policy has authentication strength configured in grantControls." -ForegroundColor Green
+                }
+            } catch {
+                Write-Host "Error retrieving Conditional Access policies." -ForegroundColor Red
+                Write-Host $_.Exception.Message
+            }
+        }
+    },
+    @{
+        Name = "5.2.2.6 Conditional Access Session Controls Check"
+        Type = "Script"
+        Logic = {
+            try {
+
+                $policies = Get-MgIdentityConditionalAccessPolicy | Where-Object { $_.State -eq "enabled" }
+
+                if ($policies.Count -eq 0) {
+                    Write-Host "Fail: No enabled Conditional Access policies found." -ForegroundColor Red
+                    return
+                }
+
+                $failFlag = $true
+
+                foreach ($policy in $policies) {
+                    $policyId = $policy.Id
+                    $endpoint = "https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies('$policyId')`?$select=sessionControls"
+
+                    $response = Invoke-MgGraphRequest -Uri $endpoint -Method GET
+                    $sessionControls = $response.sessionControls
+
+                    Write-Host "Policy ID: $policyId" -ForegroundColor Cyan
+                    Write-Host ($sessionControls | ConvertTo-Json -Depth 10)
+                    Write-Host ""
+
+                    if ($sessionControls -and $sessionControls.PSObject.Properties.Count -gt 0) {
+                        Write-Host "Pass: Conditional Access Policy '$($policy.DisplayName)' has session controls configured." -ForegroundColor Green
+                        $failFlag = $false
+                    }
+                }
+
+                if ($failFlag) {
+                    Write-Host "Fail: No enabled Conditional Access policies have session controls configured." -ForegroundColor Red
+                } else {
+                    Write-Host "Pass: At least one enabled Conditional Access policy has session controls configured." -ForegroundColor Green
+                }
+            } catch {
+                Write-Host "Error retrieving Conditional Access policies." -ForegroundColor Red
+                Write-Host $_.Exception.Message
+            }
+        }
+    },
+    @{
         Name = "5.2.2.7 Sign-In Risk Policy"
         Type = "Script"
         Logic = {
@@ -1394,6 +1669,41 @@ $scripts = @(
     
             } catch {
                 Write-Host "Error retrieving Sign-In Risk Policies" -ForegroundColor Red
+                Write-Host $_.Exception.Message
+            }
+        }
+    },
+    @{
+        Name = "5.2.3.1 Microsoft Authenticator Feature Settings"
+        Type = "Script"
+        Logic = {
+            try {
+
+
+                $authenticatorSettings = (Get-MgPolicyAuthenticationMethodPolicyAuthenticationMethodConfiguration -AuthenticationMethodConfigurationId microsoftAuthenticator | 
+                    Select-Object -ExpandProperty AdditionalProperties).featureSettings | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+
+                $authenticatorSettings | Format-Table -AutoSize
+                Write-Host ""
+                Write-Host ""
+
+                $failFlag = $false
+
+                foreach ($setting in $authenticatorSettings.PSObject.Properties) {
+                    $state = $setting.Value.state
+                    if ($state -eq "disabled") {
+                        Write-Host "Fail: $($setting.Name) is disabled." -ForegroundColor Red
+                        $failFlag = $true
+                    }
+                }
+
+                if ($failFlag) {
+                    Write-Host "Fail: Some Microsoft Authenticator settings are disabled." -ForegroundColor Red
+                } else {
+                    Write-Host "Pass: All Microsoft Authenticator settings are correctly configured." -ForegroundColor Green
+                }
+            } catch {
+                Write-Host "Error retrieving Microsoft Authenticator feature settings." -ForegroundColor Red
                 Write-Host $_.Exception.Message
             }
         }
