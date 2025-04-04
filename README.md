@@ -11,6 +11,8 @@ _The script will have an initial 'four' popup login sequences for all of the req
 ```
 Install-Module Microsoft.Graph.Identity.DirectoryManagement
 Install-Module Microsoft.Graph.Identity.SignIns
+Install-Module Microsoft.Graph.Beta
+Install-Module Microsoft.Graph
 Install-Module Microsoft.Graph.Beta.Security
 Install-Module Microsoft.Graph.Authentication
 Install-Module ExchangePowerShell
