@@ -1,8 +1,13 @@
 param(
     [string]$tenantid     = $env:TENANT_ID,
-    [ValidateSet("all","html","json","console")]
-    [string]$outputFormat = "all",   # Options: all, html, json, console
-    [Alias("html-only")][switch]$HtmlOnly
+    [ValidateSet("all", "html", "json", "console")]
+    [string]$outputFormat = "all",
+    [Alias("html-only")][switch]$HtmlOnly,
+
+    [switch]$CertAuth,
+    [string]$AppId,
+    [string]$Thumbprint,
+    [string]$Domain
 )
 
 # If the user requests HTML-only, force outputFormat and skip the scan
@@ -92,47 +97,62 @@ if (-not $HtmlOnly) {
     $Global:IPPSSession = $null
 
     function Authenticate-Once {
-        Write-Host "Authenticating to Microsoft 365 services..." -ForegroundColor Cyan
+    Write-Host "Authenticating to Microsoft 365 services..." -ForegroundColor Cyan
 
-        if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne "STA") {
-            Write-Host "Restarting in STA mode..." -ForegroundColor Yellow
-            Start-Process -FilePath "powershell.exe" -ArgumentList "-STA", "-File", $MyInvocation.MyCommand.Path -Wait
-            exit
-        }
-        
-        try {
-            Write-Host "Authenticating to Microsoft Teams..." -ForegroundColor Cyan
-            Connect-MicrosoftTeams
-            Write-Host "Connected to Microsoft Teams." -ForegroundColor Green
-            $Global:TeamsAvailable = $true
-        
-            Write-Host "Authenticating to Microsoft Graph..." -ForegroundColor Cyan
-            Connect-MgGraph -Scopes 'Policy.Read.All, Directory.Read.All, Sites.Read.All, AuditLog.Read.All, OrgSettings-Forms.Read.All, OrgSettings-AppsAndServices.Read.All, PeopleSettings.Read.All, AuditLogsQuery-SharePoint.Read.All, SecurityEvents.Read.All, SecurityActions.Read.All' -NoWelcome
-            Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
-            $Global:MgGraphAvailable = $true
-        
-            Write-Host "Authenticating to Exchange Online..." -ForegroundColor Cyan
-            Connect-ExchangeOnline
-            Write-Host "Connected to Exchange Online." -ForegroundColor Green
-            $Global:ExchangeAvailable = $true
-        
-            Write-Host "Authenticating to Security & Compliance Center (IPPS Session)..." -ForegroundColor Cyan
-            Connect-IPPSSession
-            Write-Host "Connected to Security & Compliance Center." -ForegroundColor Green
-            $Global:SecurityComplianceAvailable = $true
-        
-        } catch {
-            Write-Host "Authentication failed:" -ForegroundColor Red
-            Write-Host $_.Exception.Message
-        }
-
-        Write-Host "All services authenticated successfully!" -ForegroundColor Green
+    if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne "STA") {
+        Write-Host "Restarting in STA mode..." -ForegroundColor Yellow
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-STA", "-File", $MyInvocation.MyCommand.Path -Wait
+        exit
     }
 
-    Authenticate-Once
-        
+    try {
+        if ($CertAuth) {
+            Write-Host "Using certificate-based authentication..." -ForegroundColor Yellow
 
-    # Initialize JSON output mode based on output format parameter
+            Connect-MicrosoftTeams -CertificateThumbprint "$Thumbprint" -ApplicationId "$AppId" -TenantId "$tenantid"
+            Write-Host "Connected to Microsoft Teams." -ForegroundColor Green
+
+            Connect-MgGraph -CertificateThumbprint "$Thumbprint" -ClientId "$AppId" -TenantId "$tenantid" -NoWelcome
+            Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
+
+            Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain"
+            Write-Host "Connected to Exchange Online." -ForegroundColor Green
+
+            Connect-IPPSSession -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain"
+            Write-Host "Connected to Security & Compliance Center." -ForegroundColor Green
+
+        } else {
+            Write-Host "Using interactive authentication..." -ForegroundColor Yellow
+
+            Connect-MicrosoftTeams
+            Write-Host "Connected to Microsoft Teams." -ForegroundColor Green
+
+            Connect-MgGraph -Scopes 'Policy.Read.All, Directory.Read.All, Sites.Read.All, AuditLog.Read.All, OrgSettings-Forms.Read.All, OrgSettings-AppsAndServices.Read.All, PeopleSettings.Read.All, AuditLogsQuery-SharePoint.Read.All, SecurityEvents.Read.All, SecurityActions.Read.All' -NoWelcome
+            Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
+
+            Connect-ExchangeOnline
+            Write-Host "Connected to Exchange Online." -ForegroundColor Green
+
+            Connect-IPPSSession
+            Write-Host "Connected to Security & Compliance Center." -ForegroundColor Green
+        }
+
+        $Global:TeamsAvailable = $true
+        $Global:MgGraphAvailable = $true
+        $Global:ExchangeAvailable = $true
+        $Global:SecurityComplianceAvailable = $true
+
+    } catch {
+        Write-Host "Authentication failed:" -ForegroundColor Red
+        Write-Host $_.Exception.Message
+    }
+
+    Write-Host "All services authenticated successfully!" -ForegroundColor Green
+}
+
+Authenticate-Once
+
+# Initialize JSON output mode if scanning proceeds
     $Global:JsonOutputMode = ($outputFormat -eq "all" -or $outputFormat -eq "json")
 
     # Modify script execution to skip Exchange-dependent functions if Exchange is not available
@@ -6598,6 +6618,7 @@ if ($outputFormat -eq "all" -or $outputFormat -eq "html") {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ansi_up@5.0.0/ansi_up.min.js"></script>
   <style>
     body { font-family: 'Fira Code', monospace; background-color:rgb(3, 17, 46); color: #8488aa; }
     pre  { background: #23252e; color: #fff; border-radius:4px; padding:1em; }
@@ -6714,37 +6735,44 @@ if ($outputFormat -eq "all" -or $outputFormat -eq "html") {
 }
     $htmlContent += @"
     <script>
-    function filterStatus(status) {
+        function filterStatus(status) {
         document.querySelectorAll('.card[data-status]').forEach(card => {
-        card.style.display = (status==='all' || card.dataset.status===status)
-                            ? '' : 'none';
+            card.style.display = (status==='all' || card.dataset.status===status) ? '' : 'none';
         });
-    }
-    document.querySelectorAll('[onclick^="filterStatus"]').forEach(li => {
+        }
+        document.querySelectorAll('[onclick^=""filterStatus""]').forEach(li => {
         li.addEventListener('click', () => {
-        document.querySelectorAll('.list-group-item').forEach(i => i.classList.remove('active'));
-        li.classList.add('active');
+            document.querySelectorAll('.list-group-item').forEach(i => i.classList.remove('active'));
+            li.classList.add('active');
         });
-    });
+        });
     </script>
 
     <script>
-    const ctx = document.getElementById('statusChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-        labels: ['PASS','FAIL','MANUAL'],
-        datasets: [{
-            data: [$passCount, $failCount, $manualCount],
-            backgroundColor: ['#198754','#dc3545','#fd7e14'],
-            borderWidth: 1
-        }]
-        },
-        options: {
-        plugins: { legend: { position: 'bottom' } }
-        }
+        const ctx = document.getElementById('statusChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+            labels: ['PASS','FAIL','MANUAL'],
+            datasets: [{
+                data: [$passCount, $failCount, $manualCount],
+                backgroundColor: ['#198754','#dc3545','#fd7e14'],
+                borderWidth: 1
+            }]
+            },
+            options: {
+            plugins: { legend: { position: 'bottom' } }
+            }
+        });
+        
+    </script>
+    <script>
+    document.querySelectorAll('pre').forEach(pre => {
+      const ansi_up = new AnsiUp();
+      // take the raw text (with \x1b[31m etc) and turn it into styled HTML
+      pre.innerHTML = ansi_up.ansi_to_html(pre.textContent);
     });
-</script>
+  </script>
 </body>
 </html>
 "@
