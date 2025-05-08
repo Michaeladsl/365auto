@@ -3004,6 +3004,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-IPPSSession -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $dlpPolicy = Get-DlpCompliancePolicy
         
                     if ($dlpPolicy.Count -eq 0) {
