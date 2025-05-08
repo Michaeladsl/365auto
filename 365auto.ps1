@@ -115,10 +115,10 @@ if (-not $HtmlOnly) {
             Connect-MgGraph -CertificateThumbprint "$Thumbprint" -ClientId "$AppId" -TenantId "$tenantid" -NoWelcome
             Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
 
-            Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain"
+            Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
             Write-Host "Connected to Exchange Online." -ForegroundColor Green
 
-            Connect-IPPSSession -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain"
+            Connect-IPPSSession -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
             Write-Host "Connected to Security & Compliance Center." -ForegroundColor Green
 
         } else {
