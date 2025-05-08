@@ -394,7 +394,9 @@ Authenticate-Once
             Logic = {
                 try {
                     Write-Host "Checking sign-in status for Shared Mailboxes..." -ForegroundColor Cyan
-                    
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $MBX = Get-EXOMailbox -RecipientTypeDetails SharedMailbox -ErrorAction SilentlyContinue
                     if ($null -eq $MBX) {
                         Write-Host "No shared mailboxes found." -ForegroundColor Yellow
@@ -745,6 +747,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $sharingPolicy = Get-SharingPolicy -Identity "Default Sharing Policy"
         
                     if ($sharingPolicy) {
@@ -975,6 +980,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $lockboxConfig = Get-OrganizationConfig | Select-Object CustomerLockBoxEnabled
                     $lockboxConfig | Format-Table -AutoSize
                     Write-Host ""
@@ -1161,6 +1169,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $safeLinksPolicies = Get-SafeLinksPolicy | Select-Object Name
         
                     if ($safeLinksPolicies.Count -eq 0) {
@@ -1337,6 +1348,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $malwareFilterPolicy = Get-MalwareFilterPolicy -Identity Default | Select-Object EnableFileFilter
                     $malwareFilterPolicy | Format-Table -AutoSize
                     Write-Host ""
@@ -1388,6 +1402,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $malwareFilterPolicies = Get-MalwareFilterPolicy | Select-Object Identity, EnableInternalSenderAdminNotifications, InternalSenderAdminAddress
                     $pass = $false
                     $policyResults = @()
@@ -1483,6 +1500,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $safeAttachmentPolicies = Get-SafeAttachmentPolicy | Select-Object Name, Enable
                     $enabledPolicies = $safeAttachmentPolicies | Where-Object { $_.Enable -eq $true }
                     
@@ -1561,6 +1581,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $atpPolicies = Get-AtpPolicyForO365 | Select-Object Name, EnableATPForSPOTeamsODB, EnableSafeDocs, AllowSafeDocsOpen
                     
                     # Define the expected settings
@@ -1670,6 +1693,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $spamPolicies = Get-HostedOutboundSpamFilterPolicy | Select-Object Identity, Name, NotifyOutboundSpamRecipients, NotifyOutboundSpam
                     
                     if ($spamPolicies.Count -eq 0) {
@@ -1786,6 +1812,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $expectedValues = @{
                         Enabled                              = $true
                         PhishThresholdLevel                 = 3
@@ -2076,6 +2105,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $dkimConfig = Get-DkimSigningConfig
         
                     if ($dkimConfig.Count -eq 0) {
@@ -2340,6 +2372,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $L2Extensions = @(
                         "7z", "a3x", "ace", "ade", "adp", "ani", "app", "appinstaller",
                         "applescript", "application", "appref-ms", "appx", "appxbundle", "arj",
@@ -2467,6 +2502,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $connectionFilter = Get-HostedConnectionFilterPolicy -Identity Default
         
                     if ($connectionFilter.IPAllowList -ne $null -and $connectionFilter.IPAllowList.Count -gt 0) {
@@ -2530,6 +2568,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $connectionFilter = Get-HostedConnectionFilterPolicy -Identity Default
         
                     if ($connectionFilter.EnableSafeList -eq $true) {
@@ -2588,6 +2629,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $antiSpamPolicy = Get-HostedContentFilterPolicy -Identity Default
                     $allOK = $true
                     $issueDetails = @{}
@@ -2786,6 +2830,9 @@ Authenticate-Once
             CheckId = "2.4.4"
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $teamsProtectionPolicies = Get-TeamsProtectionPolicy | Select-Object Name, ZapEnabled
                     
                     if ($teamsProtectionPolicies.Count -eq 0) {
@@ -2895,6 +2942,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $auditLogConfig = Get-AdminAuditLogConfig | Select-Object UnifiedAuditLogIngestionEnabled
                     $auditLogConfig | Format-Table -AutoSize
                     Write-Host ""
@@ -5136,6 +5186,9 @@ Authenticate-Once
             RequiresExchange = $false
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $orgConfig = Get-OrganizationConfig | Select-Object AuditDisabled
                     $orgConfig | Format-Table -AutoSize
                     Write-Host ""
@@ -5203,7 +5256,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $mailAudit = Get-EXOMailbox -PropertySets Audit -ResultSize Unlimited | 
                                 Select-Object UserPrincipalName, AuditEnabled, AuditAdmin, AuditDelegate, AuditOwner
 
@@ -5232,6 +5287,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
         
                     $MBX = Get-MailboxAuditBypassAssociation -ResultSize unlimited
         
@@ -5286,6 +5344,9 @@ Authenticate-Once
             Name = "6.2.1 Mail Forwarding Blocked or Disabled"
             Type = "Script"
             Logic = {
+                Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                Start-Sleep 1
                 Get-TransportRule | Where-Object {$_.RedirectMessageTo -ne $null} | Format-Table Name, RedirectMessageTo
                 Get-HostedOutboundSpamFilterPolicy | Format-Table Name, AutoForwardingMode
             }
@@ -5297,7 +5358,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-        
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1        
                     $whitelistedDomains = Get-TransportRule | Where-Object { ($_.SetScl -eq -1 -and $_.SenderDomainIs -ne $null) }
         
                     if ($whitelistedDomains) {
@@ -5350,6 +5413,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $outlookSettings = Get-ExternalInOutlook
         
                     $outlookSettings | Format-List
@@ -5405,7 +5471,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-        
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $orgConfig = Get-OrganizationConfig | Select-Object OAuth2ClientProfileEnabled
         
                     if ($orgConfig.OAuth2ClientProfileEnabled -eq $true) {
@@ -5449,7 +5517,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-        
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1        
                     $mailTips = Get-OrganizationConfig | Select-Object MailTipsAllTipsEnabled, MailTipsExternalRecipientsTipsEnabled, MailTipsGroupMetricsEnabled
         
                     $mailTips | Format-Table -AutoSize
@@ -5496,7 +5566,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-        
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1        
                     $owaPolicies = Get-OwaMailboxPolicy | Select-Object Name, AdditionalStorageProvidersAvailable
         
                     $owaPolicies | Format-Table -AutoSize
@@ -5541,7 +5613,9 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-        
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1        
                     $smtpAuthConfig = Get-TransportConfig | Select-Object -ExpandProperty SmtpClientAuthenticationDisabled
                     Write-Host ""
                     Write-Host ""
@@ -6383,6 +6457,9 @@ Authenticate-Once
             CheckId = "8.6.1"
             Logic = {
                 try {
+                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                    Start-Sleep 1
                     $orgDomains = (Get-MgOrganization).VerifiedDomains | ForEach-Object { $_.Name }
                     $orgDomainsRegex = $orgDomains -join "|"
         
