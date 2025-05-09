@@ -822,38 +822,39 @@ Authenticate-Once
             Logic = {
                 try {
                     $endpoint = "https://graph.microsoft.com/beta/admin/appsAndServices"
-                    $response = Invoke-MgGraphRequest -Uri $endpoint -Method GET
+                    $response = Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/beta/admin/appsAndServices" -Method GET -OutputType Hashtable
 
-                    Write-Host "Raw API Response:"
-                    Write-Host ($response | ConvertTo-Json -Depth 10)
-                    Write-Host ""
-
-                    if (-not $response.PSObject.Properties["settings"]) {
-                        Write-Host "Fail: API response does not contain 'settings'." -ForegroundColor Red
-                        
-                        Add-Finding -CheckId $script.CheckId `
-                                -Asset "/tenants/$tenantid" `
-                                -Status "FAIL" `
-                                -Name "Apps and Services Settings Check" `
-                                -Description "Could not retrieve Apps and Services settings." `
-                                -Remediation "Investigate API access to Apps and Services settings." `
-                                -Details @{ "Message" = "API response does not contain 'settings'" } `
-                                -Impact "Minor" `
-                                -Likelihood "Low" `
-                                -Risk "Low"
+                    if (-not $response) {
+                        Write-Host "No response received from Graph API."
                         return
                     }
 
-                    $settings = $response.settings
+                    if (-not $response.ContainsKey("settings")) {
+                        Write-Host "Fail: API response does not contain 'settings'." -ForegroundColor Red
+
+                        Add-Finding -CheckId $script.CheckId `
+                            -Asset "/tenants/$tenantid" `
+                            -Status "FAIL" `
+                            -Name "Apps and Services Settings Check" `
+                            -Description "Could not retrieve Apps and Services settings." `
+                            -Remediation "Investigate API access to Apps and Services settings." `
+                            -Details @{ "Message" = "API response does not contain 'settings'" } `
+                            -Impact "Minor" `
+                            -Likelihood "Low" `
+                            -Risk "Low"
+                        return
+                    }
+
+                    $settings = $response["settings"]
                     Write-Host "Extracted Settings:"
                     Write-Host ($settings | ConvertTo-Json -Depth 10)
+
                     Write-Host ""
 
                     $isOfficeStoreEnabled = $settings.isOfficeStoreEnabled
                     $isAppAndServicesTrialEnabled = $settings.isAppAndServicesTrialEnabled
 
                     if ($isOfficeStoreEnabled -eq $true -or $isAppAndServicesTrialEnabled -eq $true) {
-                        Write-Host "Fail: One or more settings are enabled." -ForegroundColor Red
                         
                         $details = @{
                             "isOfficeStoreEnabled" = $isOfficeStoreEnabled
@@ -919,9 +920,9 @@ Authenticate-Once
                     Write-Host ($response | ConvertTo-Json -Depth 10)
                     Write-Host ""
 
-                    if (-not $response.PSObject.Properties["isInOrgFormsPhishingScanEnabled"]) {
+                    if (-not $response.ContainsKey("isInOrgFormsPhishingScanEnabled")) {
                         Write-Host "Fail: 'isInOrgFormsPhishingScanEnabled' not found in response." -ForegroundColor Red
-                        
+
                         Add-Finding -CheckId $script.CheckId `
                                 -Asset "/tenants/$tenantid" `
                                 -Status "FAIL" `
@@ -934,6 +935,7 @@ Authenticate-Once
                                 -Risk "Medium"
                         return
                     }
+
 
                     $phishingScanEnabled = $response.isInOrgFormsPhishingScanEnabled
 
