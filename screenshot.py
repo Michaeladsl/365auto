@@ -15,7 +15,6 @@ def sanitize_filename(text):
     return text.replace(':', '_').replace(' ', '_').replace('.', '_').replace('/', '_')
 
 def capture_screenshot(url, output_dir):
-    # Convert to file URL if a Windows path is provided
     if not url.lower().startswith(("http://", "https://", "file://")):
         path = url.replace("\\", "/")
         url = f"file:///{path}"
@@ -47,12 +46,11 @@ def capture_screenshot(url, output_dir):
                     EC.visibility_of(detail.find_element(By.TAG_NAME, "pre"))
                 )
 
-                # Scroll into view and wait until height > 0
                 driver.execute_script("arguments[0].scrollIntoView(true);", pre)
                 WebDriverWait(driver, 2).until(lambda d: pre.size['height'] > 0)
 
                 name = sanitize_filename(summary.text)
-                path = os.path.join(output_dir, f"{name}_screenshot_{idx}.png")
+                path = os.path.join(output_dir, f"{name}.png")
 
                 png_data = pre.screenshot_as_png
                 img = Image.open(BytesIO(png_data))
@@ -71,7 +69,7 @@ if __name__ == "__main__":
         description="Capture 'fail' screenshots from an HTML report via headless Edge"
     )
     parser.add_argument(
-        "--url", required=True,
+        "--file", required=True,
         help="URL or local file path to your HTML report"
     )
     parser.add_argument(
