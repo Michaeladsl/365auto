@@ -15,7 +15,7 @@ def sanitize_filename(text):
     return text.replace(':', '_').replace(' ', '_').replace('.', '_').replace('/', '_')
 
 def capture_screenshot(url, output_dir):
-    # if they passed a Windows path, convert to file:// URL
+    # Convert to file URL if a Windows path is provided
     if not url.lower().startswith(("http://", "https://", "file://")):
         path = url.replace("\\", "/")
         url = f"file:///{path}"
@@ -24,10 +24,12 @@ def capture_screenshot(url, output_dir):
 
     options = EdgeOptions()
     options.use_chromium = True
-    options.add_argument("--headless")
+    options.add_argument("--headless")  # Remove or comment out for debugging
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920,1080")
 
     service = EdgeService(EdgeChromiumDriverManager().install())
-    driver  = webdriver.Edge(service=service, options=options)
+    driver = webdriver.Edge(service=service, options=options)
     driver.get(url)
 
     try:
@@ -45,12 +47,16 @@ def capture_screenshot(url, output_dir):
                     EC.visibility_of(detail.find_element(By.TAG_NAME, "pre"))
                 )
 
+                # Scroll into view and wait until height > 0
+                driver.execute_script("arguments[0].scrollIntoView(true);", pre)
+                WebDriverWait(driver, 2).until(lambda d: pre.size['height'] > 0)
+
                 name = sanitize_filename(summary.text)
                 path = os.path.join(output_dir, f"{name}_screenshot_{idx}.png")
 
                 png_data = pre.screenshot_as_png
-                img      = Image.open(BytesIO(png_data))
-                cropped  = img.crop((0, 1, img.width - 20, img.height))
+                img = Image.open(BytesIO(png_data))
+                cropped = img.crop((0, 1, img.width - 20, img.height))
                 cropped.save(path)
                 print(f"Saved: {path}")
 
