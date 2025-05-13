@@ -9,14 +9,15 @@ _The script will have an initial 'four' popup login sequences for all of the req
 ### Installs
 
 ```
-Install-Module Microsoft.Graph.Identity.DirectoryManagement
-Install-Module Microsoft.Graph.Identity.SignIns
-Install-Module Microsoft.Graph.Beta
-Install-Module Microsoft.Graph
-Install-Module Microsoft.Graph.Beta.Security
-Install-Module Microsoft.Graph.Authentication
-Install-Module ExchangePowerShell
-Install-Module MicrosoftTeams
+Install-Module -Name Microsoft.Graph.Identity.DirectoryManagement -Force -AllowClobber -Confirm:$false
+Install-Module -Name Microsoft.Graph.Identity.SignIns              -Force -AllowClobber -Confirm:$false
+Install-Module -Name Microsoft.Graph.Beta                          -Force -AllowClobber -Confirm:$false
+Install-Module -Name Microsoft.Graph                               -Force -AllowClobber -Confirm:$false
+Install-Module -Name Microsoft.Graph.Beta.Security                 -Force -AllowClobber -Confirm:$false
+Install-Module -Name Microsoft.Graph.Authentication                -Force -AllowClobber -Confirm:$false
+Install-Module -Name ExchangePowerShell                            -Force -AllowClobber -Confirm:$false
+Install-Module -Name MicrosoftTeams                                -Force -AllowClobber -Confirm:$false
+
 ```
 
 ### Usage
