@@ -74,13 +74,11 @@ if (-not $HtmlOnly) {
             $finding["remediation"] = $Remediation
         }
         
-        # Create the check ID array if it doesn't exist
         $fullCheckId = "CIS_O365_v4.0.0_$CheckId"
         if (-not $jsonResults.ContainsKey($fullCheckId)) {
             $jsonResults[$fullCheckId] = @()
         }
         
-        # Add the finding to the appropriate check
         $jsonResults[$fullCheckId] += $finding
     }
 
@@ -97,62 +95,88 @@ if (-not $HtmlOnly) {
     $Global:IPPSSession = $null
 
     function Authenticate-Once {
-    Write-Host "Authenticating to Microsoft 365 services..." -ForegroundColor Cyan
+        Write-Host "Authenticating to Microsoft 365 services..." -ForegroundColor Cyan
 
-    if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne "STA") {
-        Write-Host "Restarting in STA mode..." -ForegroundColor Yellow
-        Start-Process -FilePath "powershell.exe" -ArgumentList "-STA", "-File", $MyInvocation.MyCommand.Path -Wait
-        exit
-    }
-
-    try {
-        if ($CertAuth) {
-            Write-Host "Using certificate-based authentication..." -ForegroundColor Yellow
-
-            Connect-MicrosoftTeams -CertificateThumbprint "$Thumbprint" -ApplicationId "$AppId" -TenantId "$tenantid"
-            Write-Host "Connected to Microsoft Teams." -ForegroundColor Green
-
-            Connect-MgGraph -CertificateThumbprint "$Thumbprint" -ClientId "$AppId" -TenantId "$tenantid" -NoWelcome
-            Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
-
-            Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-            Write-Host "Connected to Exchange Online." -ForegroundColor Green
-
-            Connect-IPPSSession -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-            Write-Host "Connected to Security & Compliance Center." -ForegroundColor Green
-
-        } else {
-            Write-Host "Using interactive authentication..." -ForegroundColor Yellow
-
-            Connect-MicrosoftTeams
-            Write-Host "Connected to Microsoft Teams." -ForegroundColor Green
-
-            Connect-MgGraph -Scopes 'Policy.Read.All, Directory.Read.All, Sites.Read.All, AuditLog.Read.All, OrgSettings-Forms.Read.All, OrgSettings-AppsAndServices.Read.All, PeopleSettings.Read.All, AuditLogsQuery-SharePoint.Read.All, SecurityEvents.Read.All, SecurityActions.Read.All' -NoWelcome
-            Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
-
-            Connect-ExchangeOnline
-            Write-Host "Connected to Exchange Online." -ForegroundColor Green
-
-            Connect-IPPSSession
-            Write-Host "Connected to Security & Compliance Center." -ForegroundColor Green
+        if ([System.Threading.Thread]::CurrentThread.ApartmentState -ne "STA") {
+            Write-Host "Restarting in STA mode..." -ForegroundColor Yellow
+            Start-Process -FilePath "powershell.exe" -ArgumentList "-STA", "-File", $MyInvocation.MyCommand.Path -Wait
+            exit
         }
 
-        $Global:TeamsAvailable = $true
-        $Global:MgGraphAvailable = $true
-        $Global:ExchangeAvailable = $true
-        $Global:SecurityComplianceAvailable = $true
+        try {
+            if ($CertAuth) {
+                Write-Host "Using certificate-based authentication..." -ForegroundColor Yellow
 
-    } catch {
-        Write-Host "Authentication failed:" -ForegroundColor Red
-        Write-Host $_.Exception.Message
+                Connect-MicrosoftTeams -CertificateThumbprint "$Thumbprint" -ApplicationId "$AppId" -TenantId "$tenantid"
+                Write-Host "Connected to Microsoft Teams." -ForegroundColor Green
+
+                Connect-MgGraph -CertificateThumbprint "$Thumbprint" -ClientId "$AppId" -TenantId "$tenantid" -NoWelcome
+                Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
+
+                Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                Write-Host "Connected to Exchange Online." -ForegroundColor Green
+
+                Connect-IPPSSession -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
+                Write-Host "Connected to Security & Compliance Center." -ForegroundColor Green
+
+            } else {
+                Write-Host "Using interactive authentication..." -ForegroundColor Yellow
+
+                Connect-MicrosoftTeams
+                Write-Host "Connected to Microsoft Teams." -ForegroundColor Green
+
+                Connect-MgGraph -Scopes 'Policy.Read.All, Directory.Read.All, Sites.Read.All, AuditLog.Read.All, OrgSettings-Forms.Read.All, OrgSettings-AppsAndServices.Read.All, PeopleSettings.Read.All, AuditLogsQuery-SharePoint.Read.All, SecurityEvents.Read.All, SecurityActions.Read.All' -NoWelcome
+                Write-Host "Connected to Microsoft Graph." -ForegroundColor Green
+
+                Connect-ExchangeOnline
+                Write-Host "Connected to Exchange Online." -ForegroundColor Green
+
+                Connect-IPPSSession
+                Write-Host "Connected to Security & Compliance Center." -ForegroundColor Green
+            }
+
+            $Global:TeamsAvailable = $true
+            $Global:MgGraphAvailable = $true
+            $Global:ExchangeAvailable = $true
+            $Global:SecurityComplianceAvailable = $true
+
+        } catch {
+            Write-Host "Authentication failed:" -ForegroundColor Red
+            Write-Host $_.Exception.Message
+        }
+
+        Write-Host "All services authenticated successfully!" -ForegroundColor Green
     }
 
-    Write-Host "All services authenticated successfully!" -ForegroundColor Green
-}
+    function Ensure-ExchangeConnection {
+        param (
+            [switch]$CertAuth,
+            [string]$AppId,
+            [string]$Thumbprint,
+            [string]$Domain
+        )
 
-Authenticate-Once
+        if ($CertAuth) {
+            try {
+                Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
+            } catch {
+                Write-Host ""
+            }
 
-# Initialize JSON output mode if scanning proceeds
+            try {
+                Connect-ExchangeOnline -CertificateThumbprint $Thumbprint -AppId $AppId -Organization $Domain -ShowBanner:$false
+                Start-Sleep -Seconds 1
+            } catch {
+                Write-Host "Reconnect to ExchangeOnline failed:" -ForegroundColor Red
+            }
+        } else {
+            Write-Host ""
+        }
+    }
+
+    Authenticate-Once
+
+
     $Global:JsonOutputMode = ($outputFormat -eq "all" -or $outputFormat -eq "json")
 
     # Modify script execution to skip Exchange-dependent functions if Exchange is not available
@@ -394,9 +418,7 @@ Authenticate-Once
             Logic = {
                 try {
                     Write-Host "Checking sign-in status for Shared Mailboxes..." -ForegroundColor Cyan
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $MBX = Get-EXOMailbox -RecipientTypeDetails SharedMailbox -ErrorAction SilentlyContinue
                     if ($null -eq $MBX) {
                         Write-Host "No shared mailboxes found." -ForegroundColor Yellow
@@ -747,9 +769,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $sharingPolicy = Get-SharingPolicy -Identity "Default Sharing Policy"
         
                     if ($sharingPolicy) {
@@ -982,9 +1002,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $lockboxConfig = Get-OrganizationConfig | Select-Object CustomerLockBoxEnabled
                     $lockboxConfig | Format-Table -AutoSize
                     Write-Host ""
@@ -1171,9 +1189,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $safeLinksPolicies = Get-SafeLinksPolicy | Select-Object Name
         
                     if ($safeLinksPolicies.Count -eq 0) {
@@ -1350,9 +1366,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $malwareFilterPolicy = Get-MalwareFilterPolicy -Identity Default | Select-Object EnableFileFilter
                     $malwareFilterPolicy | Format-Table -AutoSize
                     Write-Host ""
@@ -1404,9 +1418,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $malwareFilterPolicies = Get-MalwareFilterPolicy | Select-Object Identity, EnableInternalSenderAdminNotifications, InternalSenderAdminAddress
                     $pass = $false
                     $policyResults = @()
@@ -1502,9 +1514,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $safeAttachmentPolicies = Get-SafeAttachmentPolicy | Select-Object Name, Enable
                     $enabledPolicies = $safeAttachmentPolicies | Where-Object { $_.Enable -eq $true }
                     
@@ -1583,9 +1593,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $atpPolicies = Get-AtpPolicyForO365 | Select-Object Name, EnableATPForSPOTeamsODB, EnableSafeDocs, AllowSafeDocsOpen
                     
                     # Define the expected settings
@@ -1695,9 +1703,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $spamPolicies = Get-HostedOutboundSpamFilterPolicy | Select-Object Identity, Name, NotifyOutboundSpamRecipients, NotifyOutboundSpam
                     
                     if ($spamPolicies.Count -eq 0) {
@@ -1743,8 +1749,12 @@ Authenticate-Once
                             Write-Host "  NotifyOutboundSpamRecipients: $($notifyRecipients -join ", ")" -ForegroundColor Green
                         } else {
                             Write-Host "Policy '$($policy.Name)' is not properly configured:" -ForegroundColor Yellow
-                            Write-Host "  NotifyOutboundSpam: $notifyOutboundSpam - Expected: True" -ForegroundColor (if ($notifyOutboundSpam -eq $true) {"Green"} else {"Red"})
-                            Write-Host "  NotifyOutboundSpamRecipients: $($notifyRecipients -join ", ") - Expected: At least one email address" -ForegroundColor (if ($notifyRecipients -ne $null -and $notifyRecipients.Count -gt 0) {"Green"} else {"Red"})
+                            $color1 = if ($notifyOutboundSpam -eq $true) { "Green" } else { "Red" }
+                            $color2 = if ($notifyRecipients -ne $null -and $notifyRecipients.Count -gt 0) { "Green" } else { "Red" }
+
+                            Write-Host "  NotifyOutboundSpam: $notifyOutboundSpam - Expected: True" -ForegroundColor $color1
+                            Write-Host "  NotifyOutboundSpamRecipients: $($notifyRecipients -join ", ") - Expected: At least one email address" -ForegroundColor $color2
+
                         }
                         
                         $policyResults += $policyResult
@@ -1814,9 +1824,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $expectedValues = @{
                         Enabled                              = $true
                         PhishThresholdLevel                 = 3
@@ -2107,9 +2115,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $dkimConfig = Get-DkimSigningConfig
         
                     if ($dkimConfig.Count -eq 0) {
@@ -2374,9 +2380,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $L2Extensions = @(
                         "7z", "a3x", "ace", "ade", "adp", "ani", "app", "appinstaller",
                         "applescript", "application", "appref-ms", "appx", "appxbundle", "arj",
@@ -2504,9 +2508,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $connectionFilter = Get-HostedConnectionFilterPolicy -Identity Default
         
                     if ($connectionFilter.IPAllowList -ne $null -and $connectionFilter.IPAllowList.Count -gt 0) {
@@ -2570,9 +2572,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $connectionFilter = Get-HostedConnectionFilterPolicy -Identity Default
         
                     if ($connectionFilter.EnableSafeList -eq $true) {
@@ -2631,9 +2631,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $antiSpamPolicy = Get-HostedContentFilterPolicy -Identity Default
                     $allOK = $true
                     $issueDetails = @{}
@@ -2750,91 +2748,89 @@ Authenticate-Once
             }
         },
         @{
-        Name = "2.4.1 Priority Account Protection Check"
-        Type = "Script"
-        CheckId = "2.4.1"
-        Logic = {
-            try {
-                $response = Get-EmailTenantSettings
+            Name = "2.4.1 Priority Account Protection Check"
+            Type = "Script"
+            CheckId = "2.4.1"
+            Logic = {
+                try {
+                    $response = Get-EmailTenantSettings
 
-                Write-Host "Raw Cmdlet Output:"
-                Write-Host ($response | ConvertTo-Json -Depth 10)
-                Write-Host ""
+                    Write-Host "Raw Cmdlet Output:"
+                    Write-Host ($response | ConvertTo-Json -Depth 10)
+                    Write-Host ""
 
-                if (-not $response.PSObject.Properties["EnablePriorityAccountProtection"]) {
-                    Write-Host "Fail: 'EnablePriorityAccountProtection' not found in output." -ForegroundColor Red
+                    if (-not $response.PSObject.Properties["EnablePriorityAccountProtection"]) {
+                        Write-Host "Fail: 'EnablePriorityAccountProtection' not found in output." -ForegroundColor Red
+                        
+                        if ($Global:JsonOutputMode) {
+                            Add-Finding -CheckId $script.CheckId `
+                                    -Asset "/tenants/$tenantid" `
+                                    -Status "FAIL" `
+                                    -Name "Priority Account Protection Check" `
+                                    -Description "Priority Account Protection property was not found in tenant settings." `
+                                    -Remediation "Verify that your tenant has the appropriate licenses to use Priority Account Protection." `
+                                    -Details @{ "Error" = "EnablePriorityAccountProtection property not found in response" } `
+                                    -Impact "Moderate" `
+                                    -Likelihood "Moderate" `
+                                    -Risk "Medium"
+                        }
+                        return
+                    }
+
+                    $isPriorityProtectionEnabled = $response.EnablePriorityAccountProtection
+
+                    if ($isPriorityProtectionEnabled -eq $true) {
+                        Write-Host "Pass: Priority Account Protection is enabled." -ForegroundColor Green
+                        
+                        if ($Global:JsonOutputMode) {
+                            Add-Finding -CheckId $script.CheckId `
+                                    -Asset "/tenants/$tenantid" `
+                                    -Status "PASS" `
+                                    -Name "Priority Account Protection Check" `
+                                    -Description "Priority Account Protection is enabled as recommended." `
+                                    -Details @{ "EnablePriorityAccountProtection" = $isPriorityProtectionEnabled }
+                        }
+                    } else {
+                        Write-Host "Fail: Priority Account Protection is not enabled." -ForegroundColor Red
+                        
+                        if ($Global:JsonOutputMode) {
+                            Add-Finding -CheckId $script.CheckId `
+                                    -Asset "/tenants/$tenantid" `
+                                    -Status "FAIL" `
+                                    -Name "Priority Account Protection Check" `
+                                    -Description "Priority Account Protection is not enabled." `
+                                    -Remediation "Enable Priority Account Protection in Microsoft 365 Defender portal to provide enhanced protection for high-value users." `
+                                    -Details @{ "EnablePriorityAccountProtection" = $isPriorityProtectionEnabled } `
+                                    -Impact "Moderate" `
+                                    -Likelihood "Moderate" `
+                                    -Risk "Medium"
+                        }
+                    }
+                } catch {
+                    Write-Host "Error retrieving Email Tenant Settings." -ForegroundColor Red
+                    Write-Host $_.Exception.Message
                     
                     if ($Global:JsonOutputMode) {
                         Add-Finding -CheckId $script.CheckId `
                                 -Asset "/tenants/$tenantid" `
-                                -Status "FAIL" `
+                                -Status "ERROR" `
                                 -Name "Priority Account Protection Check" `
-                                -Description "Priority Account Protection property was not found in tenant settings." `
-                                -Remediation "Verify that your tenant has the appropriate licenses to use Priority Account Protection." `
-                                -Details @{ "Error" = "EnablePriorityAccountProtection property not found in response" } `
-                                -Impact "Moderate" `
-                                -Likelihood "Moderate" `
-                                -Risk "Medium"
+                                -Description "Error occurred while checking Priority Account Protection settings." `
+                                -Details @{ "ErrorMessage" = $_.Exception.Message } `
+                                -Impact "Minor" `
+                                -Likelihood "Low" `
+                                -Risk "Low"
                     }
-                    return
-                }
-
-                $isPriorityProtectionEnabled = $response.EnablePriorityAccountProtection
-
-                if ($isPriorityProtectionEnabled -eq $true) {
-                    Write-Host "Pass: Priority Account Protection is enabled." -ForegroundColor Green
-                    
-                    if ($Global:JsonOutputMode) {
-                        Add-Finding -CheckId $script.CheckId `
-                                -Asset "/tenants/$tenantid" `
-                                -Status "PASS" `
-                                -Name "Priority Account Protection Check" `
-                                -Description "Priority Account Protection is enabled as recommended." `
-                                -Details @{ "EnablePriorityAccountProtection" = $isPriorityProtectionEnabled }
-                    }
-                } else {
-                    Write-Host "Fail: Priority Account Protection is not enabled." -ForegroundColor Red
-                    
-                    if ($Global:JsonOutputMode) {
-                        Add-Finding -CheckId $script.CheckId `
-                                -Asset "/tenants/$tenantid" `
-                                -Status "FAIL" `
-                                -Name "Priority Account Protection Check" `
-                                -Description "Priority Account Protection is not enabled." `
-                                -Remediation "Enable Priority Account Protection in Microsoft 365 Defender portal to provide enhanced protection for high-value users." `
-                                -Details @{ "EnablePriorityAccountProtection" = $isPriorityProtectionEnabled } `
-                                -Impact "Moderate" `
-                                -Likelihood "Moderate" `
-                                -Risk "Medium"
-                    }
-                }
-            } catch {
-                Write-Host "Error retrieving Email Tenant Settings." -ForegroundColor Red
-                Write-Host $_.Exception.Message
-                
-                if ($Global:JsonOutputMode) {
-                    Add-Finding -CheckId $script.CheckId `
-                            -Asset "/tenants/$tenantid" `
-                            -Status "ERROR" `
-                            -Name "Priority Account Protection Check" `
-                            -Description "Error occurred while checking Priority Account Protection settings." `
-                            -Details @{ "ErrorMessage" = $_.Exception.Message } `
-                            -Impact "Minor" `
-                            -Likelihood "Low" `
-                            -Risk "Low"
                 }
             }
-        }
-    },
+        },
         @{
             Name = "2.4.4 Zero Hour Purge for Teams"
             Type = "Script"
             CheckId = "2.4.4"
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $teamsProtectionPolicies = Get-TeamsProtectionPolicy | Select-Object Name, ZapEnabled
                     
                     if ($teamsProtectionPolicies.Count -eq 0) {
@@ -2944,9 +2940,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $auditLogConfig = Get-AdminAuditLogConfig | Select-Object UnifiedAuditLogIngestionEnabled
                     $auditLogConfig | Format-Table -AutoSize
                     Write-Host ""
@@ -5011,34 +5005,76 @@ Authenticate-Once
             }
         },
         @{
-            Name = "5.2.3.5 Weak Authentication Methods Disabled"
-            Type = "Manual"
+            Name = "5.2.3.5 Weak Authentication Methods Enabled"
+            Type = "Script"
             CheckId = "5.2.3.5"
-            RequiresExchange = $false
-            Link = "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/AuthenticationMethodsMenuBlade/~/AdminAuthMethods/fromNav/Identity"
-            explanation = {
-                Verify weak authentication methods are not used
-                Ensure 'SMS, Voice Call, and Email OTP' are set to 'No'
-            }
-            Logic = {
-                $tenantid = (Get-MgContext).TenantId
-                # Manual check, add finding to JSON results
-                Add-Finding -CheckId $script.CheckId `
+            Logic   = {
+                try {
+                    $allMethods = (Get-MgPolicyAuthenticationMethodPolicy).AuthenticationMethodConfigurations
+
+                    $targetMethods = @("Sms", "Voice", "Email")
+
+                    $failFlag = $false
+                    $enabledMethods = @()
+                    $disabledMethods = @()
+
+                    foreach ($methodId in $targetMethods) {
+                        $methodConfig = $allMethods | Where-Object { $_.Id -eq $methodId }
+                        if ($methodConfig -and $methodConfig.State -ne "disabled") {
+                            Write-Host "$($methodId) method is not disabled (State = $($methodConfig.State))." -ForegroundColor Red
+                            $failFlag = $true
+                            $enabledMethods += $methodId
+                        } else {
+                            $disabledMethods += $methodId
+                        }
+                    }
+
+                    if ($failFlag) {
+                        Write-Host ""
+                        Write-host ""
+                        Write-Host "Fail: One or more of SMS, Voice or Email authentication methods are enabled." -ForegroundColor Red
+                        Add-Finding -CheckId $script.CheckId `
+                            -Asset "/tenants/$tenantid" `
+                            -Status "FAIL" `
+                            -Name "Disable SMS, Voice and Email Authentication Methods" `
+                            -Description "SMS, Voice and Email authentication methods should be disabled to reduce risk of social engineering attacks." `
+                            -Remediation "Navigate to Azure AD > Authentication methods > Policies, and disable SMS, Voice, and Email methods." `
+                            -Details @{
+                                EnabledMethods  = $enabledMethods
+                                DisabledMethods = $disabledMethods
+                                Remediation     = "Disable the following methods: $($enabledMethods -join ', ')"
+                            } `
+                            -Impact "Moderate" `
+                            -Likelihood "Moderate" `
+                            -Risk "Medium"
+                    } else {
+                        Write-Host "Pass: All targeted authentication methods are disabled (SMS, Voice, Email)." -ForegroundColor Green
+                        Add-Finding -CheckId $script.CheckId `
+                            -Asset "/tenants/$tenantid" `
+                            -Status "PASS" `
+                            -Name "Disable SMS, Voice and Email Authentication Methods" `
+                            -Message "SMS, Voice and Email methods are all disabled" `
+                            -Description "SMS, Voice and Email authentication methods should be disabled to reduce risk of social engineering attacks." `
+                            -Details @{
+                                DisabledMethods = $disabledMethods
+                            } `
+                            -Impact "Moderate" `
+                            -Likelihood "Moderate" `
+                            -Risk "Medium"
+                    }
+                } catch {
+                    Write-Host "Error retrieving authentication method configurations." -ForegroundColor Red
+                    Write-Host $_.Exception.Message
+                    Add-Finding -CheckId $script.CheckId `
                         -Asset "/tenants/$tenantid" `
-                        -Status "MANUAL" `
-                        -Name "Weak Authentication Methods Disabled" `
-                        -Description "Weak authentication methods should be disabled." `
-                        -Remediation "Ensure SMS, Voice Call, and Email OTP authentication methods are set to 'No'" `
-                        -Details @{ 
-                            "CheckLink" = "https://entra.microsoft.com/#view/Microsoft_AAD_IAM/AuthenticationMethodsMenuBlade/~/AdminAuthMethods/fromNav/Identity"
-                            "VerificationSteps" = @(
-                                "Verify weak authentication methods are not used",
-                                "Ensure 'SMS, Voice Call, and Email OTP' are set to 'No'"
-                            )
-                        } `
+                        -Status "ERROR" `
+                        -Name "Disable SMS, Voice and Email Authentication Methods" `
+                        -Message "Error retrieving method configurations: $($_.Exception.Message)" `
+                        -Description "SMS, Voice and Email authentication methods should be disabled to reduce risk of social engineering attacks." `
                         -Impact "Moderate" `
                         -Likelihood "Moderate" `
                         -Risk "Medium"
+                }
             }
         },
         @{
@@ -5191,9 +5227,7 @@ Authenticate-Once
             RequiresExchange = $false
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $orgConfig = Get-OrganizationConfig | Select-Object AuditDisabled
                     $orgConfig | Format-Table -AutoSize
                     Write-Host ""
@@ -5255,15 +5289,13 @@ Authenticate-Once
             }
         },    
         @{
-            Name = "6.1.2 Mailbox Auditing for E3 Users"
+            Name = "6.1.2 Mailbox Auditing"
             Type = "Script"
             CheckId = "6.1.2"
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $mailAudit = Get-EXOMailbox -PropertySets Audit -ResultSize Unlimited | 
                                 Select-Object UserPrincipalName, AuditEnabled, AuditAdmin, AuditDelegate, AuditOwner
 
@@ -5286,15 +5318,13 @@ Authenticate-Once
             }
         },
         @{
-            Name = "6.1.4 Audit Bypass Enabled"
+            Name = "6.1.3 Audit Bypass Enabled"
             Type = "Script"
-            CheckId = "6.1.4"
+            CheckId = "6.1.3"
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
         
                     $MBX = Get-MailboxAuditBypassAssociation -ResultSize unlimited
         
@@ -5363,9 +5393,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1        
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain        
                     $whitelistedDomains = Get-TransportRule | Where-Object { ($_.SetScl -eq -1 -and $_.SenderDomainIs -ne $null) }
         
                     if ($whitelistedDomains) {
@@ -5418,9 +5446,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $outlookSettings = Get-ExternalInOutlook
         
                     $outlookSettings | Format-List
@@ -5476,9 +5502,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $orgConfig = Get-OrganizationConfig | Select-Object OAuth2ClientProfileEnabled
         
                     if ($orgConfig.OAuth2ClientProfileEnabled -eq $true) {
@@ -5522,9 +5546,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1        
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain        
                     $mailTips = Get-OrganizationConfig | Select-Object MailTipsAllTipsEnabled, MailTipsExternalRecipientsTipsEnabled, MailTipsGroupMetricsEnabled
         
                     $mailTips | Format-Table -AutoSize
@@ -5571,9 +5593,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1        
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain        
                     $owaPolicies = Get-OwaMailboxPolicy | Select-Object Name, AdditionalStorageProvidersAvailable
         
                     $owaPolicies | Format-Table -AutoSize
@@ -5618,9 +5638,7 @@ Authenticate-Once
             RequiresExchange = $true
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1        
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain        
                     $smtpAuthConfig = Get-TransportConfig | Select-Object -ExpandProperty SmtpClientAuthenticationDisabled
                     Write-Host ""
                     Write-Host ""
@@ -6462,9 +6480,7 @@ Authenticate-Once
             CheckId = "8.6.1"
             Logic = {
                 try {
-                    Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue
-                    Connect-ExchangeOnline -CertificateThumbprint "$Thumbprint" -AppId "$AppId" -Organization "$Domain" -ShowBanner:$false
-                    Start-Sleep 1
+                    Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
                     $orgDomains = (Get-MgOrganization).VerifiedDomains | ForEach-Object { $_.Name }
                     $orgDomainsRegex = $orgDomains -join "|"
         
