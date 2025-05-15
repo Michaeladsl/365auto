@@ -4878,7 +4878,7 @@ if (-not $HtmlOnly) {
                             } `
                             -Impact "Moderate" `
                             -Likelihood "High" `
-                            -Risk "High"
+                            -Risk "Serious"
                         return
                     }
         
@@ -4926,7 +4926,7 @@ if (-not $HtmlOnly) {
                             } `
                             -Impact "Moderate" `
                             -Likelihood "High" `
-                            -Risk "High"
+                            -Risk "Serious"
                     } else {
                         Write-Host "PASS: Custom Banned Password List is configured." -ForegroundColor Green
                         
@@ -4941,7 +4941,7 @@ if (-not $HtmlOnly) {
                             } `
                             -Impact "Moderate" `
                             -Likelihood "High" `
-                            -Risk "High"
+                            -Risk "Serious"
                     }
                 } catch {
                     Write-Host "Error retrieving directory settings." -ForegroundColor Red
@@ -4959,7 +4959,7 @@ if (-not $HtmlOnly) {
                         } `
                         -Impact "Moderate" `
                         -Likelihood "High" `
-                        -Risk "High"
+                        -Risk "Serious"
                 }
             }
         },    
@@ -5120,7 +5120,7 @@ if (-not $HtmlOnly) {
                         } `
                         -Impact "Major" `
                         -Likelihood "Moderate" `
-                        -Risk "High"
+                        -Risk "Serious"
             }
         },
         @{
@@ -5217,7 +5217,7 @@ if (-not $HtmlOnly) {
                         } `
                         -Impact "Major" `
                         -Likelihood "Moderate" `
-                        -Risk "High"
+                        -Risk "Serious"
             }
         },
         @{
