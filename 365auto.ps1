@@ -2632,81 +2632,31 @@ if (-not $HtmlOnly) {
             Logic = {
                 try {
                     Ensure-ExchangeConnection -CertAuth:$CertAuth -AppId $AppId -Thumbprint $Thumbprint -Domain $Domain
-                    $antiSpamPolicy = Get-HostedContentFilterPolicy -Identity Default
                     $allOK = $true
                     $issueDetails = @{}
-                    
-                    Write-Host ""
-                    Write-Host ""
-                    
-                    if ($antiSpamPolicy.HighConfidenceSpamAction -ne "Quarantine") {
-                        Write-Host "Fail: HighConfidenceSpamAction is not set to Quarantine. Current value: $($antiSpamPolicy.HighConfidenceSpamAction)" -ForegroundColor Red
-                        $allOK = $false
-                        $issueDetails["HighConfidenceSpamAction"] = $antiSpamPolicy.HighConfidenceSpamAction
+
+                    $policies = Get-HostedContentFilterPolicy
+                    foreach ($policy in $policies) {
+                        if ($policy.AllowedSenderDomains -and $policy.AllowedSenderDomains.Count -gt 0) {
+                            Write-Host ""
+                            Write-Host "Fail: AllowedSenderDomains is set in policy '$($policy.Identity)'. Current value: $($policy.AllowedSenderDomains -join ', ')" -ForegroundColor Red
+                            $allOK = $false
+                            $issueDetails[$policy.Identity] = @{
+                                "AllowedSenderDomains" = $policy.AllowedSenderDomains
+                            }
+                        }
                     }
-                    
-                    if ($antiSpamPolicy.SpamAction -ne "MoveToJmf") {
-                        Write-Host "Fail: SpamAction is not set to MoveToJmf. Current value: $($antiSpamPolicy.SpamAction)" -ForegroundColor Red
-                        $allOK = $false
-                        $issueDetails["SpamAction"] = $antiSpamPolicy.SpamAction
-                    }
-                    
-                    if ($antiSpamPolicy.BulkSpamAction -ne "MoveToJmf") {
-                        Write-Host "Fail: BulkSpamAction is not set to MoveToJmf. Current value: $($antiSpamPolicy.BulkSpamAction)" -ForegroundColor Red
-                        $allOK = $false
-                        $issueDetails["BulkSpamAction"] = $antiSpamPolicy.BulkSpamAction
-                    }
-                    
-                    if ($antiSpamPolicy.PhishSpamAction -ne "Quarantine") {
-                        Write-Host "Fail: PhishSpamAction is not set to Quarantine. Current value: $($antiSpamPolicy.PhishSpamAction)" -ForegroundColor Red
-                        $allOK = $false
-                        $issueDetails["PhishSpamAction"] = $antiSpamPolicy.PhishSpamAction
-                    }
-                    
-                    if ($antiSpamPolicy.HighConfidencePhishAction -ne "Quarantine") {
-                        Write-Host "Fail: HighConfidencePhishAction is not set to Quarantine. Current value: $($antiSpamPolicy.HighConfidencePhishAction)" -ForegroundColor Red
-                        $allOK = $false
-                        $issueDetails["HighConfidencePhishAction"] = $antiSpamPolicy.HighConfidencePhishAction
-                    }
-                    
-                    if ($antiSpamPolicy.EnableEndUserSpamNotifications -ne $true) {
-                        Write-Host "Fail: EnableEndUserSpamNotifications is not enabled. Current value: $($antiSpamPolicy.EnableEndUserSpamNotifications)" -ForegroundColor Red
-                        $allOK = $false
-                        $issueDetails["EnableEndUserSpamNotifications"] = $antiSpamPolicy.EnableEndUserSpamNotifications
-                    }
-                    
-                    if ($antiSpamPolicy.SpamZapEnabled -ne $true) {
-                        Write-Host "Fail: SpamZapEnabled is not enabled. Current value: $($antiSpamPolicy.SpamZapEnabled)" -ForegroundColor Red
-                        $allOK = $false
-                        $issueDetails["SpamZapEnabled"] = $antiSpamPolicy.SpamZapEnabled
-                    }
-                    
-                    if ($antiSpamPolicy.PhishZapEnabled -ne $true) {
-                        Write-Host "Fail: PhishZapEnabled is not enabled. Current value: $($antiSpamPolicy.PhishZapEnabled)" -ForegroundColor Red
-                        $allOK = $false
-                        $issueDetails["PhishZapEnabled"] = $antiSpamPolicy.PhishZapEnabled
-                    }
-                    
-                    # Check if all tests passed
+
                     if ($allOK) {
-                        Write-Host "Pass: All Anti-Spam settings are configured correctly." -ForegroundColor Green
-                        
+                        Write-Host "Pass: AllowedSenderDomains is not set on any Inbound Anti-Spam Policies." -ForegroundColor Green
+
                         if ($Global:JsonOutputMode) {
                             Add-Finding -CheckId $script.CheckId `
                                     -Asset "/tenants/$tenantid" `
                                     -Status "PASS" `
                                     -Name "Inbound Anti-Spam Policies Check" `
-                                    -Description "All Anti-Spam settings are configured correctly." `
-                                    -Details @{
-                                            "HighConfidenceSpamAction" = $antiSpamPolicy.HighConfidenceSpamAction
-                                            "SpamAction" = $antiSpamPolicy.SpamAction
-                                            "BulkSpamAction" = $antiSpamPolicy.BulkSpamAction
-                                            "PhishSpamAction" = $antiSpamPolicy.PhishSpamAction
-                                            "HighConfidencePhishAction" = $antiSpamPolicy.HighConfidencePhishAction
-                                            "EnableEndUserSpamNotifications" = $antiSpamPolicy.EnableEndUserSpamNotifications
-                                            "SpamZapEnabled" = $antiSpamPolicy.SpamZapEnabled
-                                            "PhishZapEnabled" = $antiSpamPolicy.PhishZapEnabled
-                                    }
+                                    -Description "AllowedSenderDomains is not defined for any inbound policy." `
+                                    -Details @{}
                         }
                     } else {
                         if ($Global:JsonOutputMode) {
@@ -2714,16 +2664,8 @@ if (-not $HtmlOnly) {
                                     -Asset "/tenants/$tenantid" `
                                     -Status "FAIL" `
                                     -Name "Inbound Anti-Spam Policies Check" `
-                                    -Description "One or more Anti-Spam settings are not configured correctly." `
-                                    -Remediation "Configure Anti-Spam policies with recommended settings:
-                                        - HighConfidenceSpamAction: Quarantine
-                                        - SpamAction: MoveToJmf
-                                        - BulkSpamAction: MoveToJmf
-                                        - PhishSpamAction: Quarantine
-                                        - HighConfidencePhishAction: Quarantine
-                                        - EnableEndUserSpamNotifications: True
-                                        - SpamZapEnabled: True
-                                        - PhishZapEnabled: True" `
+                                    -Description "One or more inbound policies have AllowedSenderDomains defined." `
+                                    -Remediation "Remove entries from AllowedSenderDomains for all inbound policies." `
                                     -Details $issueDetails `
                                     -Impact "Moderate" `
                                     -Likelihood "Moderate" `
@@ -2733,16 +2675,16 @@ if (-not $HtmlOnly) {
                 } catch {
                     Write-Host "Error checking Inbound Anti-Spam Policies." -ForegroundColor Red
                     Write-Host $_.Exception.Message
-                                            if ($Global:JsonOutputMode) {
-                            Add-Finding -CheckId $script.CheckId `
-                                -Asset "/tenants/$tenantid" `
-                                -Status "ERROR" `
-                                -Name "Inbound Anti-Spam Policies Check" `
-                                -Description "Error occurred while checking Inbound Anti-Spam Policies." `
-                                -Details @{ "ErrorMessage" = $_.Exception.Message } `
-                                -Impact "Minor" `
-                                -Likelihood "Low" `
-                                -Risk "Low"
+                    if ($Global:JsonOutputMode) {
+                        Add-Finding -CheckId $script.CheckId `
+                            -Asset "/tenants/$tenantid" `
+                            -Status "ERROR" `
+                            -Name "Inbound Anti-Spam Policies Check" `
+                            -Description "Error occurred while checking Inbound Anti-Spam Policies." `
+                            -Details @{ "ErrorMessage" = $_.Exception.Message } `
+                            -Impact "Minor" `
+                            -Likelihood "Low" `
+                            -Risk "Low"
                     }
                 }
             }
@@ -5921,7 +5863,7 @@ if (-not $HtmlOnly) {
             }
         },
         @{
-            Name = "8.2.3 External Teams Communication"
+            Name = "8.2.3 External Teams Communication Initiation"
             Type = "Script"
             CheckId = "8.2.3"
             Logic = {
@@ -6719,7 +6661,15 @@ if ($outputFormat -eq "all" -or $outputFormat -eq "html") {
   <script src="https://cdn.jsdelivr.net/npm/ansi_up@5.0.0/ansi_up.min.js"></script>
   <style>
     body { font-family: 'Fira Code', monospace; background-color:rgb(3, 17, 46); color: #8488aa; }
-    pre  { background: #23252e; color: #fff; border-radius:4px; padding:1em; }
+    pre  {
+        background: #23252e;
+        color: #fff;
+        border-radius: 4px;
+        padding: 1em;
+        white-space: pre-wrap;       /* allow line wrap */
+        word-wrap: break-word;       /* break long strings */
+        overflow-x: auto;            /* optional horizontal scroll */
+    }
     summary::-webkit-details-marker { display: none; }
     .details-summary { cursor: pointer; font-weight: bold; }
     .details-summary.pass   { color: #198754; }
